@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+sqlalchemy
+psycopg2-binary
+alembic
+pytest
+langchain
+chromadb
+sentence-transformers
