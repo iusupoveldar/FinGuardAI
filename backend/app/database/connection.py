@@ -4,11 +4,11 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.orm import sessionmaker
 
-from app.config import settings
+from app.config import DATABASE_URL
 
 
 engine = create_engine(
-    settings.database_url,
+    DATABASE_URL,
     pool_pre_ping=True,
 )
 

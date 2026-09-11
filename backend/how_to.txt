@@ -1,2 +1,0 @@
-Run Docker after starting docker desktop
-docker compose up -d

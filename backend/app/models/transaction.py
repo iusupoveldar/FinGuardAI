@@ -8,6 +8,7 @@ from sqlalchemy import DateTime
 from sqlalchemy import ForeignKey
 from sqlalchemy import Index
 from sqlalchemy import Numeric
+from sqlalchemy import Integer
 from sqlalchemy import String
 from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import mapped_column
@@ -69,8 +70,8 @@ class Transaction(Base):
         nullable=False,
     )
 
-    timestamp: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
+    timestamp: Mapped[int] = mapped_column(
+        Integer,
         nullable=False,
     )
 

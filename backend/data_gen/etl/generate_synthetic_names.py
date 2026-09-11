@@ -1,6 +1,5 @@
 
 from faker import Faker
-import pandas as pd
 from pathlib import Path
 import hashlib
 
@@ -43,21 +42,3 @@ def generate_customer_name(
     fake.seed_instance(seed)
 
     return fake.name()
-
-# fake = Faker.seed(42)
-
-
-# parent_path = Path(__file__).resolve().parent.parent
-# account_path = Path.joinpath(parent_path,r'data\raw\accounts.csv')
-# processed_account_path = Path.joinpath(parent_path,r'data\processed\accounts.csv')
-
-
-# df = pd.read_csv(account_path)
-# names = []
-# for row in df.itertuples():
-#     names.append(generate_customer_name(row[2]))
-
-# df['NAME'] = names
-# df[['FIRST_NAME', 'LAST_NAME']] = df['NAME'].str.split(n=1, expand=True)
-# print(df.head(5))
-# df.to_csv(processed_account_path, index=False)
