@@ -9,3 +9,5 @@ env.txt
 /backend/app/__pycache__
 /backend/app/models/__pycache__
 /backend/data_gen/etl/__pycache__
+frontend/node_modules/
+frontend/dist/
