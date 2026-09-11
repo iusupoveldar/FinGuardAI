@@ -26,6 +26,7 @@ This will call "Transaction Analysis" -> "RAG retrival" -> "Deepseek" or any oth
 ## Button "Investigation" -> Output: Summary, Risk factors, Evidence, Relevant AML rules, Recommended next steps, Sources
 
 # ML
+include docs/architecture-decisions.md
 
 # Database
 

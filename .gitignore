@@ -2,3 +2,4 @@
 ./finguardai
 .env
 .env
+/backend/app/api/__pycache__

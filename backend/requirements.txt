@@ -7,3 +7,5 @@ pytest
 langchain
 chromadb
 sentence-transformers
+python-dotenv
+pydantic
