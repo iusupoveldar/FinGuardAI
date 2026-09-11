@@ -14,17 +14,18 @@ class Customer(Base):
 
     customer_id: Mapped[str] = mapped_column(
         String(128),
-        primary_key=True,
+        primary_key=True
     )
 
     profile: Mapped["CustomerProfile | None"] = relationship(
         "CustomerProfile",
         back_populates="customer",
-        uselist=False,
-        cascade="all, delete-orphan",
+        uselist=False
     )
-
-    accounts: Mapped[list["Account"]] = relationship(
+    
+    accounts: Mapped[
+        list["Account"]
+    ] = relationship(
         "Account",
         back_populates="customer",
     )

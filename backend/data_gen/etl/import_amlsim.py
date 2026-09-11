@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 
 from app.database.connection import SessionLocal
 
-from app.models.customer import Customer
+from app.models.customer import Customer, CustomerProfile
 from app.models.account import Account
 from app.models.transaction import Transaction
 from app.models.alert import Alert
@@ -34,6 +34,10 @@ ACCOUNT_FILE = (
     Path.joinpath(parent_path,"data/raw/accounts.csv")
 )
 
+CUSTOMER_PROFILE_FILE = (
+    Path.joinpath(parent_path,"data/processed/customer_profiles.csv")
+)
+
 TRANSACTION_FILE = (
     Path.joinpath(parent_path,"data/raw/transactions.csv")
 )
@@ -41,7 +45,6 @@ TRANSACTION_FILE = (
 ALERT_FILE = (
     Path.joinpath(parent_path,"data/raw/alerts.csv")
 )
-
 
 def load_customers(
     db: Session
@@ -68,9 +71,37 @@ def load_customers(
 
     db.commit()
 
+def load_customer_profiles(
+        db: Session
+):
+    df = pd.read_csv(
+        CUSTOMER_PROFILE_FILE
+    )
+
+
+    for _, row in df.iterrows():
+
+        profile = CustomerProfile(
+
+            customer_id=str(
+                row["CUSTOMER_ID"]
+            ),
+
+            synthetic_display_name=row[
+                "SYNTHETIC_DISPLAY_NAME"
+            ]
+
+        )
+
+
+        db.add(profile)
+
+
+    db.commit()
+
 def load_accounts(
     db: Session
-):
+    ):
     df = pd.read_csv(
         ACCOUNT_FILE
     )
@@ -245,6 +276,12 @@ def main():
             "Loading customers"
         )
         load_customers(db)
+
+        print(
+            "Loading customer profiles"
+        )
+
+        load_customer_profiles(db)
 
         print(
             "Loading accounts"
