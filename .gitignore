@@ -3,6 +3,9 @@
 .env.*
 !.env.example
 env.txt
-__pycache__/
+*./__pycache__/
 .pytest_cache/
 *.py[cod]
+/backend/app/__pycache__
+/backend/app/models/__pycache__
+/backend/data_gen/etl/__pycache__

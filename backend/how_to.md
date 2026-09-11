@@ -18,8 +18,10 @@ docker exec -it finguard-database psql -U finguard -d finguard
 \dt
 
 # Development-only full reset (destructive)
-DROP SCHEMA public CASCADE;
-CREATE SCHEMA public;
+python -m app.database.recreate_import
+
+# Non-interactive local automation
+python -m app.database.recreate_import --yes
 
 
 # Verify Tables
@@ -34,3 +36,7 @@ SELECT COUNT(*) FROM alerts;
 SELECT COUNT(*) FROM alert_transactions;
 
 SELECT status, row_counts FROM import_runs ORDER BY started_at DESC;
+
+
+# Reinstall DB
+python -m app.database.recreate_import
