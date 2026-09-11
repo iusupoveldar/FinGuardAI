@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from datetime import datetime
 from decimal import Decimal
 
+from sqlalchemy import BigInteger
 from sqlalchemy import Boolean
-from sqlalchemy import DateTime
+from sqlalchemy import CheckConstraint
 from sqlalchemy import ForeignKey
 from sqlalchemy import Index
 from sqlalchemy import Numeric
@@ -22,28 +22,37 @@ class Transaction(Base):
 
     __table_args__ = (
         Index(
-            "ix_transactions_sender_timestamp",
+            "ix_transactions_sender_step",
             "sender_account_id",
-            "timestamp",
+            "simulation_step",
         ),
         Index(
-            "ix_transactions_receiver_timestamp",
+            "ix_transactions_receiver_step",
             "receiver_account_id",
-            "timestamp",
+            "simulation_step",
         ),
         Index(
-            "ix_transactions_alert_id",
-            "alert_id",
+            "ix_transactions_simulation_step",
+            "simulation_step",
+        ),
+        CheckConstraint(
+            "tx_amount >= 0",
+            name="tx_amount_nonnegative",
+        ),
+        CheckConstraint(
+            "simulation_step >= 0",
+            name="simulation_step_nonnegative",
         ),
     )
 
-    tx_id: Mapped[str] = mapped_column(
-        String(128),
+    tx_id: Mapped[int] = mapped_column(
+        BigInteger,
         primary_key=True,
+        autoincrement=False,
     )
 
-    sender_account_id: Mapped[str] = mapped_column(
-        String(128),
+    sender_account_id: Mapped[int] = mapped_column(
+        BigInteger,
         ForeignKey(
             "accounts.account_id",
             ondelete="RESTRICT",
@@ -51,8 +60,8 @@ class Transaction(Base):
         nullable=False,
     )
 
-    receiver_account_id: Mapped[str] = mapped_column(
-        String(128),
+    receiver_account_id: Mapped[int] = mapped_column(
+        BigInteger,
         ForeignKey(
             "accounts.account_id",
             ondelete="RESTRICT",
@@ -70,19 +79,9 @@ class Transaction(Base):
         nullable=False,
     )
 
-    timestamp: Mapped[int] = mapped_column(
+    simulation_step: Mapped[int] = mapped_column(
         Integer,
         nullable=False,
-    )
-
-    ground_truth_is_fraud: Mapped[bool] = mapped_column(
-        Boolean,
-        nullable=False,
-    )
-
-    alert_id: Mapped[str | None] = mapped_column(
-        String(128),
-        nullable=True,
     )
 
     sender_account: Mapped["Account"] = relationship(
@@ -93,4 +92,42 @@ class Transaction(Base):
     receiver_account: Mapped["Account"] = relationship(
         "Account",
         foreign_keys=[receiver_account_id],
+    )
+
+    alert_links: Mapped[list["AlertTransaction"]] = relationship(
+        "AlertTransaction",
+        back_populates="transaction",
+        cascade="all, delete-orphan",
+    )
+
+    ground_truth: Mapped["TransactionGroundTruth | None"] = relationship(
+        "TransactionGroundTruth",
+        back_populates="transaction",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+
+
+class TransactionGroundTruth(Base):
+    """Restricted synthetic labels; never use these as inference features."""
+
+    __tablename__ = "transaction_ground_truth"
+
+    tx_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey(
+            "transactions.tx_id",
+            ondelete="CASCADE",
+        ),
+        primary_key=True,
+    )
+
+    is_fraud: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+    )
+
+    transaction: Mapped["Transaction"] = relationship(
+        "Transaction",
+        back_populates="ground_truth",
     )

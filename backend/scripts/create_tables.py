@@ -1,24 +1,17 @@
-from app.database.base import Base
-from app.database.connection import engine
+from pathlib import Path
 
-from app.models.customer import Customer
-from app.models.account import Account
-from app.models.transaction import Transaction
-from app.models.alert import Alert
-from app.models.alert import AlertTransaction
+from alembic import command
+from alembic.config import Config
 
 
-
-def create_tables():
-
-    print("Creating tables...")
+BACKEND_DIR = Path(__file__).resolve().parent.parent
 
 
-    Base.metadata.create_all(
-        bind=engine
-    )
-
-
+def create_tables() -> None:
+    """Upgrade the configured database to the latest reviewed migration."""
+    print("Applying database migrations...")
+    config = Config(str(BACKEND_DIR / "alembic.ini"))
+    command.upgrade(config, "head")
     print("Done")
 
 

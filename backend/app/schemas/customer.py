@@ -1,10 +1,21 @@
+from decimal import Decimal
+
 from pydantic import BaseModel
+from pydantic import ConfigDict
 
-class CustomersResponse(BaseModel):
-    id: int
-    name: str
+
+class AccountSummary(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    account_id: int
+    init_balance: Decimal
     country: str
-    risk: int
+    account_type: str
 
-    class Config:
-        from_attributes = True
+
+class CustomerResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    customer_id: str
+    synthetic_display_name: str | None
+    accounts: list[AccountSummary]

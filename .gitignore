@@ -2,4 +2,7 @@
 ./finguardai
 .env.*
 !.env.example
-/backend/app/api/__pycache__
+env.txt
+__pycache__/
+.pytest_cache/
+*.py[cod]

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from sqlalchemy import BigInteger
 from sqlalchemy import Boolean
 from sqlalchemy import ForeignKey
+from sqlalchemy import Index
 from sqlalchemy import String
 from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import mapped_column
@@ -13,9 +15,10 @@ from app.database.base import Base
 class Alert(Base):
     __tablename__ = "alerts"
 
-    alert_id: Mapped[str] = mapped_column(
-        String(128),
+    alert_id: Mapped[int] = mapped_column(
+        BigInteger,
         primary_key=True,
+        autoincrement=False,
     )
 
     alert_type: Mapped[str] = mapped_column(
@@ -40,8 +43,15 @@ class Alert(Base):
 class AlertTransaction(Base):
     __tablename__ = "alert_transactions"
 
-    alert_id: Mapped[str] = mapped_column(
-        String(128),
+    __table_args__ = (
+        Index(
+            "ix_alert_transactions_tx_id",
+            "tx_id",
+        ),
+    )
+
+    alert_id: Mapped[int] = mapped_column(
+        BigInteger,
         ForeignKey(
             "alerts.alert_id",
             ondelete="CASCADE",
@@ -49,8 +59,8 @@ class AlertTransaction(Base):
         primary_key=True,
     )
 
-    tx_id: Mapped[str] = mapped_column(
-        String(128),
+    tx_id: Mapped[int] = mapped_column(
+        BigInteger,
         ForeignKey(
             "transactions.tx_id",
             ondelete="CASCADE",
@@ -65,4 +75,5 @@ class AlertTransaction(Base):
 
     transaction: Mapped["Transaction"] = relationship(
         "Transaction",
+        back_populates="alert_links",
     )

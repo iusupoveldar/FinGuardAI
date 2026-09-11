@@ -30,6 +30,18 @@ class Customer(Base):
         back_populates="customer",
     )
 
+    risk_scores: Mapped[list["RiskScore"]] = relationship(
+        "RiskScore",
+        back_populates="customer",
+        cascade="all, delete-orphan",
+    )
+
+    investigations: Mapped[list["Investigation"]] = relationship(
+        "Investigation",
+        back_populates="customer",
+        cascade="all, delete-orphan",
+    )
+
 
 class CustomerProfile(Base):
     __tablename__ = "customer_profiles"
