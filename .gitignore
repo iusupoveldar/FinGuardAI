@@ -1,5 +1,5 @@
 .env
 ./finguardai
-.env
-.env
+.env.*
+!.env.example
 /backend/app/api/__pycache__

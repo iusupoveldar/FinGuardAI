@@ -1,25 +1,53 @@
-from sqlalchemy import Column, Integer, String
+from __future__ import annotations
 
-from app.database.base import base
+from sqlalchemy import ForeignKey
+from sqlalchemy import String
+from sqlalchemy.orm import Mapped
+from sqlalchemy.orm import mapped_column
+from sqlalchemy.orm import relationship
 
-class Customer(base):
-    __tablename__ = 'customers'
+from app.database.base import Base
 
-    id = Column(
-        Integer,
-        primary_key=True
+
+class Customer(Base):
+    __tablename__ = "customers"
+
+    customer_id: Mapped[str] = mapped_column(
+        String(128),
+        primary_key=True,
     )
 
-    name = Column(
-        String
+    profile: Mapped["CustomerProfile | None"] = relationship(
+        "CustomerProfile",
+        back_populates="customer",
+        uselist=False,
+        cascade="all, delete-orphan",
     )
 
-    
-    country = Column(
-        String
+    accounts: Mapped[list["Account"]] = relationship(
+        "Account",
+        back_populates="customer",
     )
 
-    
-    risk_score = Column(
-        Integer
+
+class CustomerProfile(Base):
+    __tablename__ = "customer_profiles"
+
+    customer_id: Mapped[str] = mapped_column(
+        String(128),
+        ForeignKey(
+            "customers.customer_id",
+            ondelete="CASCADE",
+        ),
+        primary_key=True,
+    )
+
+    synthetic_display_name: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+
+    customer: Mapped["Customer"] = relationship(
+        "Customer",
+        back_populates="profile",
     )

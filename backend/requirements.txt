@@ -9,3 +9,6 @@ chromadb
 sentence-transformers
 python-dotenv
 pydantic
+faker
+pandas
+numpy

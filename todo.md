@@ -30,6 +30,8 @@ include docs/architecture-decisions.md
 
 # Database
 
+# TODO: Rethink the design: Separate table for risk
+
 ## Database Design
 ## Table: Cusatomers
     * id
