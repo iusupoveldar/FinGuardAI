@@ -4,6 +4,7 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   Building2,
+  ChevronLeft,
   ChevronRight,
   CircleDollarSign,
   FileSearch,
@@ -18,6 +19,8 @@ import {
 
 // In development, Vite forwards /api requests to FastAPI on port 8000.
 const API_URL = import.meta.env.VITE_API_URL || "/api";
+const DEFAULT_PAGE_SIZE = 10;
+const PAGE_SIZE_OPTIONS = [5, 10, 20, 50];
 
 function formatMoney(value) {
   return new Intl.NumberFormat("en-US", {
@@ -29,6 +32,28 @@ function formatMoney(value) {
 
 function displayName(customer) {
   return customer.synthetic_display_name || `Customer ${customer.customer_id}`;
+}
+
+// The API does not expose sex yet. This stable fallback keeps the temporary
+// synthetic profile data consistent across refreshes.
+function customerSex(customer) {
+  if (customer.sex) return customer.sex.toLowerCase();
+  const hash = [...customer.customer_id].reduce(
+    (total, character) => total + character.charCodeAt(0),
+    0,
+  );
+  return hash % 2 === 0 ? "female" : "male";
+}
+
+function customerIdFromUrl() {
+  return new URL(window.location.href).searchParams.get("customer");
+}
+
+function updateCustomerUrl(customerId, method = "pushState") {
+  const url = new URL(window.location.href);
+  if (customerId) url.searchParams.set("customer", customerId);
+  else url.searchParams.delete("customer");
+  window.history[method]({}, "", url);
 }
 
 async function api(path, options) {
@@ -46,6 +71,9 @@ function App() {
   const [transactions, setTransactions] = useState([]);
   const [investigation, setInvestigation] = useState(null);
   const [search, setSearch] = useState("");
+  const [sex, setSex] = useState("all");
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [investigating, setInvestigating] = useState(false);
@@ -56,11 +84,36 @@ function App() {
     api("/customers/?limit=100")
       .then((data) => {
         setCustomers(data);
-        if (data.length) setSelectedCustomer(data[0]);
+        if (!data.length) return;
+
+        const requestedCustomerId = customerIdFromUrl();
+        const requestedCustomer = data.find(
+          (customer) => customer.customer_id === requestedCustomerId,
+        );
+        const initialCustomer = requestedCustomer || data[0];
+        setSelectedCustomer(initialCustomer);
+        setPage(Math.floor(data.indexOf(initialCustomer) / DEFAULT_PAGE_SIZE) + 1);
+
+        if (!requestedCustomer) {
+          updateCustomerUrl(initialCustomer.customer_id, "replaceState");
+        }
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    function restoreCustomerFromUrl() {
+      const requestedCustomerId = customerIdFromUrl();
+      const requestedCustomer = customers.find(
+        (customer) => customer.customer_id === requestedCustomerId,
+      );
+      if (requestedCustomer) setSelectedCustomer(requestedCustomer);
+    }
+
+    window.addEventListener("popstate", restoreCustomerFromUrl);
+    return () => window.removeEventListener("popstate", restoreCustomerFromUrl);
+  }, [customers]);
 
   useEffect(() => {
     if (!selectedCustomer) return;
@@ -74,13 +127,27 @@ function App() {
 
   const filteredCustomers = useMemo(() => {
     const query = search.trim().toLowerCase();
-    if (!query) return customers;
-    return customers.filter(
-      (customer) =>
+    return customers.filter((customer) => {
+      const matchesSearch =
+        !query ||
         displayName(customer).toLowerCase().includes(query) ||
-        customer.customer_id.toLowerCase().includes(query),
-    );
-  }, [customers, search]);
+        customer.customer_id.toLowerCase().includes(query);
+      const matchesSex = sex === "all" || customerSex(customer) === sex;
+      return matchesSearch && matchesSex;
+    });
+  }, [customers, search, sex]);
+
+  const pageCount = Math.max(1, Math.ceil(filteredCustomers.length / pageSize));
+  const paginatedCustomers = filteredCustomers.slice(
+    (page - 1) * pageSize,
+    page * pageSize,
+  );
+  const firstVisibleCustomer = filteredCustomers.length ? (page - 1) * pageSize + 1 : 0;
+  const lastVisibleCustomer = Math.min(page * pageSize, filteredCustomers.length);
+
+  useEffect(() => {
+    if (page > pageCount) setPage(pageCount);
+  }, [page, pageCount]);
 
   const totalAccounts = customers.reduce(
     (total, customer) => total + customer.accounts.length,
@@ -109,6 +176,11 @@ function App() {
     }
   }
 
+  function selectCustomer(customer) {
+    setSelectedCustomer(customer);
+    updateCustomerUrl(customer.customer_id);
+  }
+
   return (
     <div className="app-shell">
       <aside className={`sidebar ${mobileNavOpen ? "sidebar--open" : ""}`}>
@@ -124,17 +196,17 @@ function App() {
           <a className="nav-item nav-item--active" href="#dashboard">
             <LayoutDashboard size={19} /> Overview
           </a>
-          <a className="nav-item" href="#customers">
+          {/* <a className="nav-item" href="#customers">
             <Users size={19} /> Customers
           </a>
           <a className="nav-item" href="#investigation">
             <FileSearch size={19} /> Investigations
-          </a>
+          </a> */}
         </nav>
-        <div className="sidebar__status">
+        {/* <div className="sidebar__status">
           <span className="status-dot" />
           <div><strong>API connection</strong><small>{API_URL}</small></div>
-        </div>
+        </div> */}
       </aside>
 
       <main className="main-content">
@@ -146,7 +218,6 @@ function App() {
             <p className="eyebrow">Compliance workspace</p>
             <h1>Risk overview</h1>
           </div>
-          <div className="analyst-avatar">AM</div>
         </header>
 
         <div className="page" id="dashboard">
@@ -159,8 +230,8 @@ function App() {
 
           <section className="welcome">
             <div>
-              <span className="section-kicker"><Activity size={15} /> Live monitoring</span>
-              <h2>Good decisions start with<br />a clear financial picture.</h2>
+              <span className="section-kicker"><Activity size={15} /> Live Demo</span>
+              <h2>This is a live demo<br />every piece of data is synthetic.</h2>
               <p>Review customer activity and open an investigation when something needs a closer look.</p>
             </div>
             <div className="welcome__seal"><ShieldCheck size={48} /></div>
@@ -178,37 +249,97 @@ function App() {
                 <div><p className="eyebrow">Customer directory</p><h3>Profiles</h3></div>
                 <span className="count-pill">{filteredCustomers.length}</span>
               </div>
-              <label className="search-box">
-                <Search size={18} />
-                <input
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search name or ID"
-                  aria-label="Search customers"
-                />
-              </label>
+              <div className="customer-filters">
+                <label className="search-box">
+                  <Search size={18} />
+                  <input
+                    value={search}
+                    onChange={(event) => {
+                      setSearch(event.target.value);
+                      setPage(1);
+                    }}
+                    placeholder="Search name or ID"
+                    aria-label="Search customers by name or ID"
+                  />
+                </label>
+                <div className="filter-row">
+                  <label>
+                    <span>Sex</span>
+                    <select
+                      value={sex}
+                      onChange={(event) => {
+                        setSex(event.target.value);
+                        setPage(1);
+                      }}
+                    >
+                      <option value="all">All</option>
+                      <option value="female">Female</option>
+                      <option value="male">Male</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>Show</span>
+                    <select
+                      value={pageSize}
+                      onChange={(event) => {
+                        setPageSize(Number(event.target.value));
+                        setPage(1);
+                      }}
+                    >
+                      {PAGE_SIZE_OPTIONS.map((option) => (
+                        <option value={option} key={option}>{option}</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              </div>
               <div className="customer-list">
                 {loading ? (
                   <Loading label="Loading customers" />
                 ) : filteredCustomers.length ? (
-                  filteredCustomers.map((customer) => (
+                  paginatedCustomers.map((customer) => (
                     <button
                       className={`customer-row ${selectedCustomer?.customer_id === customer.customer_id ? "customer-row--active" : ""}`}
                       key={customer.customer_id}
-                      onClick={() => setSelectedCustomer(customer)}
+                      onClick={() => selectCustomer(customer)}
+                      aria-current={selectedCustomer?.customer_id === customer.customer_id ? "true" : undefined}
                     >
                       <span className="customer-avatar">{displayName(customer).slice(0, 2).toUpperCase()}</span>
                       <span className="customer-row__text">
                         <strong>{displayName(customer)}</strong>
-                        <small>{customer.customer_id} · {customer.accounts.length} account{customer.accounts.length === 1 ? "" : "s"}</small>
+                        <small>{customer.customer_id} · {customerSex(customer)} · {customer.accounts.length} account{customer.accounts.length === 1 ? "" : "s"}</small>
                       </span>
                       <ChevronRight size={18} />
                     </button>
                   ))
                 ) : (
-                  <EmptyState title="No customers found" text="Try a different name or customer ID." />
+                  <EmptyState title="No customers found" text="Try adjusting the search or sex filter." />
                 )}
               </div>
+              {!loading && filteredCustomers.length > 0 && (
+                <div className="pagination" aria-label="Customer pagination">
+                  <span>{firstVisibleCustomer}–{lastVisibleCustomer} of {filteredCustomers.length}</span>
+                  <div>
+                    <button
+                      className="pagination__button"
+                      onClick={() => setPage((current) => Math.max(1, current - 1))}
+                      disabled={page === 1}
+                      aria-label="Previous customer page"
+                    >
+                      <ChevronLeft size={17} />
+                    </button>
+                    <span>Page {page} of {pageCount}</span>
+                    <button
+                      className="pagination__button"
+                      onClick={() => setPage((current) => Math.min(pageCount, current + 1))}
+                      disabled={page === pageCount}
+                      aria-label="Next customer page"
+                    >
+                      <ChevronRight size={17} />
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="panel detail-panel">
@@ -217,7 +348,7 @@ function App() {
                   <div className="profile-header">
                     <div className="profile-header__identity">
                       <span className="profile-avatar">{displayName(selectedCustomer).slice(0, 2).toUpperCase()}</span>
-                      <div><p className="eyebrow">Customer profile</p><h3>{displayName(selectedCustomer)}</h3><span className="mono-id">{selectedCustomer.customer_id}</span></div>
+                      <div><p className="eyebrow">Customer profile</p><h3>{displayName(selectedCustomer)}</h3><span className="mono-id">{selectedCustomer.customer_id} · {customerSex(selectedCustomer)}</span></div>
                     </div>
                     <button className="primary-button" onClick={startInvestigation} disabled={investigating}>
                       {investigating ? <LoaderCircle className="spin" size={18} /> : <FileSearch size={18} />}
