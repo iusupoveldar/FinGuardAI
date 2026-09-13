@@ -12,3 +12,5 @@ pydantic
 faker
 pandas
 numpy
+scikit-learn
+joblib

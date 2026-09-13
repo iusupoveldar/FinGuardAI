@@ -20,9 +20,17 @@ tables, and import the sample AMLSim data:
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+pip install -e .. --no-deps
 python -m scripts.create_tables
 python -m data_gen.etl.import_amlsim
 ```
+
+The editable install makes the shared `ml` and `ai` packages available to the
+backend without copying scoring or retrieval logic.
+
+Keep this virtual environment activated for migration, training, indexing, and
+scoring commands. `python -c "import sys; print(sys.executable)"` should print a
+path inside `backend\.venv`.
 
 The import command is safe to run again when the same dataset was already
 imported. To intentionally replace the imported data, run:

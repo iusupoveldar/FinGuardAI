@@ -11,3 +11,6 @@ env.txt
 /backend/data_gen/etl/__pycache__
 frontend/node_modules/
 frontend/dist/
+ml/artifacts/
+ai/index/
+*.egg-info/

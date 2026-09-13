@@ -9,6 +9,8 @@ load_dotenv(BACKEND_DIR / ".env")
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
+RISK_MODEL_VERSION = os.getenv("RISK_MODEL_VERSION", "logistic_regression_v2")
+RISK_FEATURE_VERSION = os.getenv("RISK_FEATURE_VERSION", "transaction_features_v1")
 
 if not DATABASE_URL:
     raise RuntimeError(

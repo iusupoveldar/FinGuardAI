@@ -5,6 +5,7 @@ def test_openapi_builds_and_routes_are_typed() -> None:
     schema = app.openapi()
     assert "/customers/" in schema["paths"]
     assert "/customers/{customer_id}/transactions" in schema["paths"]
+    assert "/customers/{customer_id}/risk" in schema["paths"]
     assert "/investigate/{customer_id}" in schema["paths"]
 
     customer_response = schema["paths"]["/customers/"]["get"]["responses"]["200"]

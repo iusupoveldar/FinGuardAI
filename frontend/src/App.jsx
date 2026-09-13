@@ -60,7 +60,9 @@ async function api(path, options) {
   const response = await fetch(`${API_URL}${path}`, options);
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
-    throw new Error(body.detail || `Request failed (${response.status})`);
+    const error = new Error(body.detail || `Request failed (${response.status})`);
+    error.status = response.status;
+    throw error;
   }
   return response.json();
 }
@@ -70,6 +72,7 @@ function App() {
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [investigation, setInvestigation] = useState(null);
+  const [riskDetail, setRiskDetail] = useState(null);
   const [search, setSearch] = useState("");
   const [sex, setSex] = useState("all");
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
@@ -119,10 +122,16 @@ function App() {
     if (!selectedCustomer) return;
     setDetailLoading(true);
     setInvestigation(null);
+    setRiskDetail(null);
     api(`/customers/${encodeURIComponent(selectedCustomer.customer_id)}/transactions?limit=100`)
       .then(setTransactions)
       .catch((err) => setError(err.message))
       .finally(() => setDetailLoading(false));
+    api(`/customers/${encodeURIComponent(selectedCustomer.customer_id)}/risk`)
+      .then(setRiskDetail)
+      .catch((err) => {
+        if (err.status !== 404) setError(err.message);
+      });
   }, [selectedCustomer]);
 
   const filteredCustomers = useMemo(() => {
@@ -365,6 +374,40 @@ function App() {
                     ))}
                     {!selectedCustomer.accounts.length && <p className="muted">No linked accounts.</p>}
                   </div>
+
+                  {selectedCustomer.risk ? (
+                    <section className="risk-card" aria-label="Operational risk score">
+                      <div className="risk-card__score">
+                        <span>Operational risk</span>
+                        <strong>{Math.round(Number(selectedCustomer.risk.score))}</strong>
+                        <b className={`risk-band risk-band--${selectedCustomer.risk.risk_band}`}>
+                          {selectedCustomer.risk.risk_band}
+                        </b>
+                      </div>
+                      <div className="risk-card__evidence">
+                        <small>
+                          Cutoff step {selectedCustomer.risk.data_cutoff_step} · {selectedCustomer.risk.model_version}
+                        </small>
+                        {(selectedCustomer.risk.evidence.top_factors || []).slice(0, 3).map((factor) => (
+                          <p key={factor}>{factor}</p>
+                        ))}
+                        {riskDetail?.policy_sources?.length > 0 && (
+                          <div className="policy-sources">
+                            <span>Relevant internal policy</span>
+                            {riskDetail.policy_sources.slice(0, 3).map((source) => (
+                              <small key={source.source_id}>
+                                {source.title} v{source.version} · {source.heading}
+                              </small>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </section>
+                  ) : (
+                    <div className="unscored-note">
+                      Risk status: unscored. Run the batch scorer after importing data.
+                    </div>
+                  )}
 
                   {investigation && (
                     <div className="investigation-result" id="investigation">

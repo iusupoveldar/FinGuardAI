@@ -1,4 +1,5 @@
 from sqlalchemy import CheckConstraint
+from sqlalchemy import UniqueConstraint
 from sqlalchemy.orm import configure_mappers
 
 from app.database.base import Base
@@ -67,3 +68,20 @@ def test_money_and_step_checks_exist() -> None:
     assert "ck_accounts_init_balance_nonnegative" in account_checks
     assert "ck_transactions_tx_amount_nonnegative" in transaction_checks
     assert "ck_transactions_simulation_step_nonnegative" in transaction_checks
+
+
+def test_risk_snapshots_have_explicit_identity_and_evidence() -> None:
+    assert {"risk_band", "data_cutoff_step", "evidence"}.issubset(
+        RiskScore.__table__.columns.keys()
+    )
+    unique_columns = {
+        tuple(column.name for column in item.columns)
+        for item in RiskScore.__table__.constraints
+        if isinstance(item, UniqueConstraint)
+    }
+    assert (
+        "customer_id",
+        "data_cutoff_step",
+        "model_version",
+        "feature_version",
+    ) in unique_columns
