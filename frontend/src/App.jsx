@@ -3,11 +3,13 @@ import {
   Activity,
   ArrowDownLeft,
   ArrowUpRight,
+  BookOpen,
   Building2,
   ChevronLeft,
   ChevronRight,
   CircleDollarSign,
   FileSearch,
+  FileText,
   History,
   LayoutDashboard,
   LoaderCircle,
@@ -29,6 +31,11 @@ const CUSTOMER_SORT_OPTIONS = [
   { value: "score_asc", label: "Score: low to high" },
   { value: "customer_id_asc", label: "Customer ID" },
 ];
+const TAB_TITLES = {
+  overview: "Risk overview",
+  investigations: "Past investigations",
+  policies: "Current policies",
+};
 
 function formatMoney(value) {
   return new Intl.NumberFormat("en-US", {
@@ -90,6 +97,8 @@ function App() {
   const [investigation, setInvestigation] = useState(null);
   const [pastInvestigations, setPastInvestigations] = useState([]);
   const [selectedPastInvestigation, setSelectedPastInvestigation] = useState(null);
+  const [policies, setPolicies] = useState([]);
+  const [selectedPolicyId, setSelectedPolicyId] = useState(null);
   const [riskDetail, setRiskDetail] = useState(null);
   const [search, setSearch] = useState("");
   const [sex, setSex] = useState("all");
@@ -101,6 +110,7 @@ function App() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [investigating, setInvestigating] = useState(false);
   const [investigationsLoading, setInvestigationsLoading] = useState(false);
+  const [policiesLoading, setPoliciesLoading] = useState(false);
   const [error, setError] = useState("");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("overview");
@@ -216,6 +226,29 @@ function App() {
     return () => controller.abort();
   }, [activeTab]);
 
+  useEffect(() => {
+    if (activeTab !== "policies") return;
+    const controller = new AbortController();
+    setPoliciesLoading(true);
+    api("/policies/", { signal: controller.signal })
+      .then((documents) => {
+        setPolicies(documents);
+        setSelectedPolicyId((current) => (
+          documents.some((document) => document.document_id === current)
+            ? current
+            : documents[0]?.document_id || null
+        ));
+      })
+      .catch((err) => {
+        if (err.name !== "AbortError") setError(err.message);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setPoliciesLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [activeTab]);
+
   const filteredCustomers = useMemo(() => {
     const query = search.trim().toLowerCase();
     return customers.filter((customer) => {
@@ -235,6 +268,9 @@ function App() {
   );
   const firstVisibleCustomer = filteredCustomers.length ? (page - 1) * pageSize + 1 : 0;
   const lastVisibleCustomer = Math.min(page * pageSize, filteredCustomers.length);
+  const selectedPolicy = policies.find(
+    (policy) => policy.document_id === selectedPolicyId,
+  ) || null;
 
   useEffect(() => {
     if (page > pageCount) setPage(pageCount);
@@ -303,6 +339,11 @@ function App() {
     setMobileNavOpen(false);
   }
 
+  function openPolicy(documentId) {
+    setSelectedPolicyId(documentId);
+    showTab("policies");
+  }
+
   return (
     <div className="app-shell">
       <aside className={`sidebar ${mobileNavOpen ? "sidebar--open" : ""}`}>
@@ -327,6 +368,12 @@ function App() {
           >
             <History size={19} /> Past investigations
           </button>
+          <button
+            className={`nav-item ${activeTab === "policies" ? "nav-item--active" : ""}`}
+            onClick={() => showTab("policies")}
+          >
+            <BookOpen size={19} /> Policies
+          </button>
         </nav>
         {/* <div className="sidebar__status">
           <span className="status-dot" />
@@ -341,7 +388,7 @@ function App() {
           </button>
           <div>
             <p className="eyebrow">Compliance workspace</p>
-            <h1>{activeTab === "overview" ? "Risk overview" : "Past investigations"}</h1>
+            <h1>{TAB_TITLES[activeTab]}</h1>
           </div>
         </header>
 
@@ -545,9 +592,17 @@ function App() {
                           <div className="policy-sources">
                             <span>Relevant internal policy</span>
                             {riskDetail.policy_sources.slice(0, 3).map((source) => (
-                              <small key={source.source_id}>
-                                {source.title} v{source.version} · {source.heading}
-                              </small>
+                              <button
+                                className="policy-source-link"
+                                key={source.source_id}
+                                onClick={() => openPolicy(source.document_id)}
+                              >
+                                <span>
+                                  <strong>{source.title} v{source.version}</strong>
+                                  <small>{source.heading}</small>
+                                </span>
+                                <ChevronRight size={14} />
+                              </button>
                             ))}
                           </div>
                         )}
@@ -682,6 +737,61 @@ function App() {
             </div>
           </section>
         </div>
+
+        <div className="page" id="policies" hidden={activeTab !== "policies"}>
+          {error && (
+            <div className="error-banner">
+              <strong>Something went wrong.</strong> {error}
+              <button onClick={() => setError("")}><X size={17} /></button>
+            </div>
+          )}
+          <section className="history-heading">
+            <div>
+              <p className="eyebrow">Policy corpus</p>
+              <h2>Current policies</h2>
+              <p>Review the source documents used to support operational risk investigations.</p>
+            </div>
+            <span className="count-pill">{policies.length}</span>
+          </section>
+
+          <section className="policy-library-grid">
+            <div className="panel policy-list-panel">
+              <div className="panel__header">
+                <div><p className="eyebrow">In effect</p><h3>Documents</h3></div>
+              </div>
+              <div className="policy-list">
+                {policiesLoading ? (
+                  <Loading label="Loading policies" />
+                ) : policies.length ? (
+                  policies.map((policy) => (
+                    <button
+                      className={`policy-row ${selectedPolicyId === policy.document_id ? "policy-row--active" : ""}`}
+                      key={policy.document_id}
+                      onClick={() => setSelectedPolicyId(policy.document_id)}
+                    >
+                      <span className="history-row__icon"><FileText size={17} /></span>
+                      <span className="policy-row__text">
+                        <strong>{policy.title}</strong>
+                        <small>v{policy.version} · {policy.category}</small>
+                      </span>
+                      <ChevronRight size={16} />
+                    </button>
+                  ))
+                ) : (
+                  <EmptyState title="No current policies" text="No active policy documents are available." />
+                )}
+              </div>
+            </div>
+
+            <div className="panel policy-document-panel">
+              {selectedPolicy ? (
+                <PolicyDocument policy={selectedPolicy} />
+              ) : (
+                <EmptyState title="Select a policy" text="Choose a source document to read it here." />
+              )}
+            </div>
+          </section>
+        </div>
       </main>
     </div>
   );
@@ -732,6 +842,23 @@ function InvestigationDetail({ investigation }) {
         </div>
       )}
     </>
+  );
+}
+
+function PolicyDocument({ policy }) {
+  return (
+    <article className="policy-document">
+      <header>
+        <p className="eyebrow">{policy.document_id}</p>
+        <h2>{policy.title}</h2>
+        <div className="policy-document__metadata">
+          <span>Version {policy.version}</span>
+          <span>Effective {policy.effective_date}</span>
+          <span>{policy.jurisdiction}</span>
+        </div>
+      </header>
+      <div className="policy-document__content">{policy.content}</div>
+    </article>
   );
 }
 

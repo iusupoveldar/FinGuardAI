@@ -132,9 +132,14 @@ button { cursor: pointer; }
 .risk-card__evidence > p { color: #536159; font-size: 11px; margin: 5px 0; }
 .risk-card__evidence > p::before { content: "•"; color: #3d8962; margin-right: 7px; }
 .policy-sources { border-top: 1px solid #e0e7e2; margin-top: 10px; padding-top: 9px; }
-.policy-sources span, .policy-sources small { display: block; }
-.policy-sources span { color: #506159; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; }
-.policy-sources small { color: #77857e; font-size: 9px; margin-top: 4px; }
+.policy-sources > span { display: block; color: #506159; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; }
+.policy-source-link { width: 100%; border: 0; border-radius: 7px; background: transparent; color: #536159; display: flex; align-items: center; gap: 8px; padding: 6px 4px; text-align: left; }
+.policy-source-link:hover { color: #1f6848; background: #edf6f0; }
+.policy-source-link > span { min-width: 0; flex: 1; }
+.policy-source-link strong, .policy-source-link small { display: block; }
+.policy-source-link strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }
+.policy-source-link small { color: #77857e; font-size: 9px; margin-top: 2px; }
+.policy-source-link svg { flex: 0 0 auto; }
 .unscored-note { color: #6f7d76; background: #f5f7f5; border: 1px solid #e2e7e3; border-radius: 9px; padding: 11px 13px; margin-bottom: 20px; font-size: 11px; }
 .investigation-result { display: flex; gap: 11px; border: 1px solid #bde4cc; background: #edf9f1; color: #1d6344; border-radius: 10px; padding: 13px 15px; margin-bottom: 20px; }
 .investigation-result svg { flex: 0 0 auto; }
@@ -179,6 +184,23 @@ button { cursor: pointer; }
 .history-sections ul { margin: 0; padding-left: 18px; color: #536159; }
 .history-sections li { margin: 5px 0; font-size: 11px; line-height: 1.45; }
 .history-generation-mode { display: block; margin-top: 20px; color: #7f8c85; font-size: 9px; text-transform: uppercase; letter-spacing: .05em; }
+.policy-library-grid { display: grid; grid-template-columns: minmax(280px, .7fr) minmax(520px, 1.6fr); gap: 18px; align-items: start; }
+.policy-list-panel { overflow: hidden; }
+.policy-list { max-height: 680px; overflow-y: auto; padding: 0 9px 10px; }
+.policy-row { width: 100%; border: 0; background: transparent; color: var(--ink); display: flex; align-items: center; gap: 10px; padding: 12px 10px; border-radius: 10px; text-align: left; }
+.policy-row:hover { background: #f6f8f6; }
+.policy-row--active { background: #edf6f0; }
+.policy-row__text { min-width: 0; flex: 1; }
+.policy-row__text strong, .policy-row__text small { display: block; }
+.policy-row__text strong { font-size: 12px; line-height: 1.35; }
+.policy-row__text small { margin-top: 4px; color: #88958f; font-size: 9px; text-transform: capitalize; }
+.policy-row > svg { flex: 0 0 auto; color: #73827a; }
+.policy-document-panel { min-height: 520px; padding: 30px 34px; }
+.policy-document header { border-bottom: 1px solid var(--line); padding-bottom: 18px; }
+.policy-document h2 { margin: 5px 0 12px; font: 700 24px/1.25 "Manrope", sans-serif; }
+.policy-document__metadata { display: flex; flex-wrap: wrap; gap: 7px; }
+.policy-document__metadata span { color: #5d6c64; background: #edf2ee; border-radius: 99px; padding: 5px 9px; font-size: 9px; }
+.policy-document__content { margin-top: 22px; color: #3f4e47; font: 12px/1.75 "DM Sans", sans-serif; white-space: pre-wrap; overflow-wrap: anywhere; }
 .transactions-header { border-top: 1px solid var(--line); padding: 20px 0 12px; display: flex; align-items: end; justify-content: space-between; }
 .transactions-header h4 { margin: 3px 0 0; font: 700 16px "Manrope", sans-serif; }
 .transactions-header > span { color: #89958f; font-size: 10px; }
@@ -208,6 +230,7 @@ td small { color: #a0aaa5; font-size: 9px; margin-top: 2px; }
 @media (max-width: 1050px) {
   .workspace-grid { grid-template-columns: 1fr; }
   .history-grid { grid-template-columns: 1fr; }
+  .policy-library-grid { grid-template-columns: 1fr; }
   .customer-list { max-height: 330px; }
 }
 @media (max-width: 760px) {
@@ -225,4 +248,5 @@ td small { color: #a0aaa5; font-size: 9px; margin-top: 2px; }
   .primary-button { width: 100%; }
   .risk-card { grid-template-columns: 1fr; }
   .risk-card__score { border-right: 0; border-bottom: 1px solid #dfe7e1; padding: 0 0 12px; }
+  .policy-document-panel { padding: 22px 20px; }
 }

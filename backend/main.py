@@ -4,8 +4,9 @@ from fastapi.middleware.cors import CORSMiddleware
 # Register all ORM models before the first database query configures mappers.
 import app.models  # noqa: F401
 from app.api import customers
-from app.api import transactions
 from app.api import investigation
+from app.api import policies
+from app.api import transactions
 
 app = FastAPI(
     title = "FinGuard AI",
@@ -29,6 +30,7 @@ app.add_middleware(
 app.include_router(customers.router)
 app.include_router(transactions.router)
 app.include_router(investigation.router)
+app.include_router(policies.router)
 
 @app.get("/")
 async def root():
