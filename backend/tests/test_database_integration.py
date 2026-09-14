@@ -105,10 +105,29 @@ def test_investigation_endpoint_is_honest_and_persistent() -> None:
         response = client.post("/investigate/C_0")
         assert response.status_code == 200
         payload = response.json()
-        assert payload["status"] == "pending"
-        assert "have not been run" in payload["summary"]
-        assert "risk_score" not in payload
-        assert payload["evidence"]["transaction_count"] >= 0
+        # The POST response may be the newly serialized pending row or a cached
+        # completed row from an earlier identical request.
+        assert payload["status"] in {"pending", "completed"}
+        polled = client.get(f"/investigations/{payload['investigation_id']}")
+        assert polled.status_code == 200
+        completed = polled.json()
+        assert completed["status"] == "completed"
+        assert completed["evidence"]["generation_mode"] == "deterministic_fallback"
+
+        cached = client.post("/investigate/C_0")
+        assert cached.status_code == 200
+        assert cached.json()["investigation_id"] == payload["investigation_id"]
+
+        latest = client.get("/customers/C_0/investigations/latest")
+        assert latest.status_code == 200
+        assert latest.json()["investigation_id"] == payload["investigation_id"]
+
+        history = client.get("/investigations/?limit=10")
+        assert history.status_code == 200
+        assert any(
+            item["investigation_id"] == payload["investigation_id"]
+            for item in history.json()
+        )
 
 
 def test_database_rejects_negative_transaction_amounts() -> None:

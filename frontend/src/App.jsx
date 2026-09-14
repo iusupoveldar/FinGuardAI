@@ -8,6 +8,7 @@ import {
   ChevronRight,
   CircleDollarSign,
   FileSearch,
+  History,
   LayoutDashboard,
   LoaderCircle,
   Menu,
@@ -21,6 +22,13 @@ import {
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 const DEFAULT_PAGE_SIZE = 10;
 const PAGE_SIZE_OPTIONS = [5, 10, 20, 50];
+const DEFAULT_CUSTOMERS_AMOUNT = 100;
+const CUSTOMERS_SIZE_OPTIONS = [100, 500, 1000];
+const CUSTOMER_SORT_OPTIONS = [
+  { value: "score_desc", label: "Score: high to low" },
+  { value: "score_asc", label: "Score: low to high" },
+  { value: "customer_id_asc", label: "Customer ID" },
+];
 
 function formatMoney(value) {
   return new Intl.NumberFormat("en-US", {
@@ -32,6 +40,14 @@ function formatMoney(value) {
 
 function displayName(customer) {
   return customer.synthetic_display_name || `Customer ${customer.customer_id}`;
+}
+
+function formatDate(value) {
+  if (!value) return "—";
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
 }
 
 // The API does not expose sex yet. This stable fallback keeps the temporary
@@ -72,19 +88,35 @@ function App() {
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [investigation, setInvestigation] = useState(null);
+  const [pastInvestigations, setPastInvestigations] = useState([]);
+  const [selectedPastInvestigation, setSelectedPastInvestigation] = useState(null);
   const [riskDetail, setRiskDetail] = useState(null);
   const [search, setSearch] = useState("");
   const [sex, setSex] = useState("all");
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [customersAmount, setCustomersAmount] = useState(DEFAULT_CUSTOMERS_AMOUNT);
+  const [customerSort, setCustomerSort] = useState("score_desc");
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [investigating, setInvestigating] = useState(false);
+  const [investigationsLoading, setInvestigationsLoading] = useState(false);
   const [error, setError] = useState("");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState("overview");
 
   useEffect(() => {
-    api("/customers/?limit=100")
+    const controller = new AbortController();
+
+    setLoading(true);
+    setError("");
+    const separator = customerSort.lastIndexOf("_");
+    const sortBy = customerSort.slice(0, separator);
+    const sortOrder = customerSort.slice(separator + 1);
+    api(
+      `/customers/?limit=${customersAmount}&sort_by=${sortBy}&sort_order=${sortOrder}`,
+      { signal: controller.signal },
+    )
       .then((data) => {
         setCustomers(data);
         if (!data.length) return;
@@ -101,9 +133,15 @@ function App() {
           updateCustomerUrl(initialCustomer.customer_id, "replaceState");
         }
       })
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
-  }, []);
+      .catch((err) => {
+        if (err.name !== "AbortError") setError(err.message);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [customersAmount, customerSort]);
 
   useEffect(() => {
     function restoreCustomerFromUrl() {
@@ -120,19 +158,63 @@ function App() {
 
   useEffect(() => {
     if (!selectedCustomer) return;
+    const controller = new AbortController();
     setDetailLoading(true);
     setInvestigation(null);
     setRiskDetail(null);
-    api(`/customers/${encodeURIComponent(selectedCustomer.customer_id)}/transactions?limit=100`)
+    const customerId = encodeURIComponent(selectedCustomer.customer_id);
+    api(`/customers/${customerId}/transactions?limit=100`, { signal: controller.signal })
       .then(setTransactions)
-      .catch((err) => setError(err.message))
-      .finally(() => setDetailLoading(false));
-    api(`/customers/${encodeURIComponent(selectedCustomer.customer_id)}/risk`)
+      .catch((err) => {
+        if (err.name !== "AbortError") setError(err.message);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setDetailLoading(false);
+      });
+    api(`/customers/${customerId}/risk`, { signal: controller.signal })
       .then(setRiskDetail)
       .catch((err) => {
-        if (err.status !== 404) setError(err.message);
+        if (err.name !== "AbortError" && err.status !== 404) setError(err.message);
       });
+    api(`/customers/${customerId}/investigations/latest`, { signal: controller.signal })
+      .then((cached) => pollInvestigation(cached, controller.signal))
+      .catch((err) => {
+        if (err.name !== "AbortError" && err.status !== 404) setError(err.message);
+      });
+
+    return () => controller.abort();
   }, [selectedCustomer]);
+
+  useEffect(() => {
+    if (activeTab !== "investigations") return;
+    const controller = new AbortController();
+    setInvestigationsLoading(true);
+    api("/investigations/?limit=200", { signal: controller.signal })
+      .then(async (items) => {
+        setPastInvestigations(items);
+        if (!items.length) {
+          setSelectedPastInvestigation(null);
+          return;
+        }
+        const selectedStillExists = items.some(
+          (item) => item.investigation_id === selectedPastInvestigation?.investigation_id,
+        );
+        if (!selectedStillExists) {
+          const full = await api(`/investigations/${items[0].investigation_id}`, {
+            signal: controller.signal,
+          });
+          setSelectedPastInvestigation(full);
+        }
+      })
+      .catch((err) => {
+        if (err.name !== "AbortError") setError(err.message);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setInvestigationsLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [activeTab]);
 
   const filteredCustomers = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -177,7 +259,7 @@ function App() {
         `/investigate/${encodeURIComponent(selectedCustomer.customer_id)}`,
         { method: "POST" },
       );
-      setInvestigation(result);
+      await pollInvestigation(result);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -185,9 +267,40 @@ function App() {
     }
   }
 
+  async function pollInvestigation(initial, signal) {
+    let result = initial;
+    setInvestigation(result);
+    const deadline = Date.now() + 60_000;
+    while (
+      ["pending", "in_progress"].includes(result.status)
+      && Date.now() < deadline
+      && !signal?.aborted
+    ) {
+      await new Promise((resolve) => window.setTimeout(resolve, 1_500));
+      result = await api(`/investigations/${result.investigation_id}`, { signal });
+      setInvestigation(result);
+    }
+    return result;
+  }
+
   function selectCustomer(customer) {
     setSelectedCustomer(customer);
     updateCustomerUrl(customer.customer_id);
+  }
+
+  async function selectPastInvestigation(item) {
+    setError("");
+    try {
+      const full = await api(`/investigations/${item.investigation_id}`);
+      setSelectedPastInvestigation(full);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  function showTab(tab) {
+    setActiveTab(tab);
+    setMobileNavOpen(false);
   }
 
   return (
@@ -202,15 +315,18 @@ function App() {
         </div>
         <nav>
           <p className="nav-label">Workspace</p>
-          <a className="nav-item nav-item--active" href="#dashboard">
+          <button
+            className={`nav-item ${activeTab === "overview" ? "nav-item--active" : ""}`}
+            onClick={() => showTab("overview")}
+          >
             <LayoutDashboard size={19} /> Overview
-          </a>
-          {/* <a className="nav-item" href="#customers">
-            <Users size={19} /> Customers
-          </a>
-          <a className="nav-item" href="#investigation">
-            <FileSearch size={19} /> Investigations
-          </a> */}
+          </button>
+          <button
+            className={`nav-item ${activeTab === "investigations" ? "nav-item--active" : ""}`}
+            onClick={() => showTab("investigations")}
+          >
+            <History size={19} /> Past investigations
+          </button>
         </nav>
         {/* <div className="sidebar__status">
           <span className="status-dot" />
@@ -225,11 +341,11 @@ function App() {
           </button>
           <div>
             <p className="eyebrow">Compliance workspace</p>
-            <h1>Risk overview</h1>
+            <h1>{activeTab === "overview" ? "Risk overview" : "Past investigations"}</h1>
           </div>
         </header>
 
-        <div className="page" id="dashboard">
+        <div className="page" id="dashboard" hidden={activeTab !== "overview"}>
           {error && (
             <div className="error-banner">
               <strong>Something went wrong.</strong> {error}
@@ -273,6 +389,21 @@ function App() {
                 </label>
                 <div className="filter-row">
                   <label>
+                    <span>Sort</span>
+                    <select
+                      value={customerSort}
+                      onChange={(event) => {
+                        setCustomerSort(event.target.value);
+                        setPage(1);
+                      }}
+                      aria-label="Sort customers"
+                    >
+                      {CUSTOMER_SORT_OPTIONS.map((option) => (
+                        <option value={option.value} key={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
                     <span>Sex</span>
                     <select
                       value={sex}
@@ -300,6 +431,20 @@ function App() {
                       ))}
                     </select>
                   </label>
+                  <label>
+                    <span>Customers</span>
+                    <select
+                      value={customersAmount}
+                      onChange={(event) => {
+                        setCustomersAmount(Number(event.target.value));
+                        setPage(1);
+                      }}
+                    >
+                      {CUSTOMERS_SIZE_OPTIONS.map((option) => (
+                        <option value={option} key={option}>{option}</option>
+                      ))}
+                    </select>
+                  </label>
                 </div>
               </div>
               <div className="customer-list">
@@ -317,6 +462,11 @@ function App() {
                       <span className="customer-row__text">
                         <strong>{displayName(customer)}</strong>
                         <small>{customer.customer_id} · {customerSex(customer)} · {customer.accounts.length} account{customer.accounts.length === 1 ? "" : "s"}</small>
+                      </span>
+                      <span className={`customer-score customer-score--${customer.risk?.risk_band || "unscored"}`}>
+                        {customer.risk && customer.risk.risk_band !== "unscored"
+                          ? Math.round(Number(customer.risk.score))
+                          : "—"}
                       </span>
                       <ChevronRight size={18} />
                     </button>
@@ -375,7 +525,7 @@ function App() {
                     {!selectedCustomer.accounts.length && <p className="muted">No linked accounts.</p>}
                   </div>
 
-                  {selectedCustomer.risk ? (
+                  {selectedCustomer.risk && selectedCustomer.risk.risk_band !== "unscored" ? (
                     <section className="risk-card" aria-label="Operational risk score">
                       <div className="risk-card__score">
                         <span>Operational risk</span>
@@ -413,8 +563,29 @@ function App() {
                     <div className="investigation-result" id="investigation">
                       <ShieldCheck size={21} />
                       <div>
-                        <strong>Investigation #{investigation.investigation_id} created</strong>
+                        <strong>Investigation #{investigation.investigation_id}</strong>
                         <p>Status: <span>{investigation.status}</span>{investigation.summary ? ` · ${investigation.summary}` : " · Analysis is queued."}</p>
+                        {investigation.evidence?.result && (
+                          <div className="investigation-details">
+                            {investigation.evidence.result.risk_factors?.length > 0 && (
+                              <section>
+                                <b>Risk factors</b>
+                                <ul>{investigation.evidence.result.risk_factors.map((item) => (
+                                  <li key={`${item.factor}-${item.evidence_ids.join("-")}`}>{item.factor}</li>
+                                ))}</ul>
+                              </section>
+                            )}
+                            <section>
+                              <b>Recommended next steps</b>
+                              <ul>{investigation.evidence.result.recommended_next_steps.map((item) => (
+                                <li key={item}>{item}</li>
+                              ))}</ul>
+                            </section>
+                            <small>
+                              Narrative: {investigation.evidence.generation_mode === "deepseek" ? "DeepSeek" : "deterministic fallback"}
+                            </small>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
@@ -456,8 +627,111 @@ function App() {
             </div>
           </section>
         </div>
+
+        <div className="page" id="investigations" hidden={activeTab !== "investigations"}>
+          {error && (
+            <div className="error-banner">
+              <strong>Something went wrong.</strong> {error}
+              <button onClick={() => setError("")}><X size={17} /></button>
+            </div>
+          )}
+          <section className="history-heading">
+            <div>
+              <p className="eyebrow">Cached results</p>
+              <h2>Past investigations</h2>
+              <p>Completed and in-progress investigations are stored and reused for unchanged risk snapshots.</p>
+            </div>
+            <span className="count-pill">{pastInvestigations.length}</span>
+          </section>
+
+          <section className="history-grid">
+            <div className="panel history-list-panel">
+              <div className="panel__header">
+                <div><p className="eyebrow">History</p><h3>Investigations</h3></div>
+              </div>
+              <div className="history-list">
+                {investigationsLoading ? (
+                  <Loading label="Loading investigations" />
+                ) : pastInvestigations.length ? (
+                  pastInvestigations.map((item) => (
+                    <button
+                      className={`history-row ${selectedPastInvestigation?.investigation_id === item.investigation_id ? "history-row--active" : ""}`}
+                      key={item.investigation_id}
+                      onClick={() => selectPastInvestigation(item)}
+                    >
+                      <span className="history-row__icon"><FileSearch size={17} /></span>
+                      <span className="history-row__text">
+                        <strong>Investigation #{item.investigation_id}</strong>
+                        <small>{item.customer_id} · {formatDate(item.updated_at)}</small>
+                      </span>
+                      <span className={`status-pill status-pill--${item.status}`}>{item.status}</span>
+                    </button>
+                  ))
+                ) : (
+                  <EmptyState title="No investigations yet" text="Start an investigation from the customer overview." />
+                )}
+              </div>
+            </div>
+
+            <div className="panel history-detail-panel">
+              {selectedPastInvestigation ? (
+                <InvestigationDetail investigation={selectedPastInvestigation} />
+              ) : (
+                <EmptyState title="Select an investigation" text="Choose a cached investigation to review its result." />
+              )}
+            </div>
+          </section>
+        </div>
       </main>
     </div>
+  );
+}
+
+function InvestigationDetail({ investigation }) {
+  const result = investigation.evidence?.result;
+  const risk = investigation.evidence?.risk_snapshot;
+  return (
+    <>
+      <div className="history-detail-header">
+        <div>
+          <p className="eyebrow">Investigation #{investigation.investigation_id}</p>
+          <h3>{investigation.customer_id}</h3>
+          <small>{formatDate(investigation.updated_at)}</small>
+        </div>
+        <span className={`status-pill status-pill--${investigation.status}`}>{investigation.status}</span>
+      </div>
+      {risk && (
+        <div className="history-risk-summary">
+          <span>Operational score</span>
+          <strong>{Math.round(Number(risk.score))}</strong>
+          <b className={`risk-band risk-band--${risk.risk_band}`}>{risk.risk_band}</b>
+        </div>
+      )}
+      <p className="history-summary">{investigation.summary || "No summary is available."}</p>
+      {result && (
+        <div className="history-sections">
+          {result.risk_factors?.length > 0 && (
+            <section><h4>Risk factors</h4><ul>{result.risk_factors.map((item) => (
+              <li key={`${item.factor}-${item.evidence_ids.join("-")}`}>{item.factor}</li>
+            ))}</ul></section>
+          )}
+          {result.relevant_rules?.length > 0 && (
+            <section><h4>Relevant rules</h4><ul>{result.relevant_rules.map((item) => (
+              <li key={`${item.rule}-${item.source_ids.join("-")}`}>{item.rule}</li>
+            ))}</ul></section>
+          )}
+          <section><h4>Recommended next steps</h4><ul>{result.recommended_next_steps.map((item) => (
+            <li key={item}>{item}</li>
+          ))}</ul></section>
+          <section><h4>Limitations</h4><ul>{result.limitations.map((item) => (
+            <li key={item}>{item}</li>
+          ))}</ul></section>
+          <small className="history-generation-mode">
+            Generated by {investigation.evidence.generation_mode === "deepseek" ? "DeepSeek" : "deterministic fallback"}
+          </small>
+        </div>
+      )}
+    </>
   );
 }
 

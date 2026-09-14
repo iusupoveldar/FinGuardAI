@@ -85,3 +85,7 @@ def test_risk_snapshots_have_explicit_identity_and_evidence() -> None:
         "model_version",
         "feature_version",
     ) in unique_columns
+
+
+def test_investigations_have_idempotent_snapshot_identity() -> None:
+    assert Investigation.__table__.columns["snapshot_key"].unique

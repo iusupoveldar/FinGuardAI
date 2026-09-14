@@ -12,12 +12,14 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from sklearn.utils.class_weight import compute_sample_weight
 from sklearn.metrics import average_precision_score, precision_score, recall_score
 
 from ml.features import FEATURE_COLUMNS, build_transaction_features
 from ml.risk_model import (
     RiskModelArtifact,
     aggregate_customer_priority,
+    build_boosted_tree_pipeline,
     build_pipeline,
     rule_benchmark,
 )
@@ -150,7 +152,18 @@ def train(
 
     pipeline = build_pipeline(random_state=random_state)
     pipeline.fit(splits["train"][0][FEATURE_COLUMNS], splits["train"][1])
+    boosted_tree = build_boosted_tree_pipeline(random_state=random_state)
+    boosted_tree.fit(
+        splits["train"][0][FEATURE_COLUMNS],
+        splits["train"][1],
+        model__sample_weight=compute_sample_weight(
+            class_weight="balanced", y=splits["train"][1]
+        ),
+    )
     validation_probabilities = pipeline.predict_proba(
+        splits["validation"][0][FEATURE_COLUMNS]
+    )[:, 1]
+    boosted_validation_probabilities = boosted_tree.predict_proba(
         splits["validation"][0][FEATURE_COLUMNS]
     )[:, 1]
 
@@ -158,6 +171,9 @@ def train(
         raise ValueError("review_rate must be between 0 and 0.5")
     transaction_high_threshold = float(
         np.quantile(validation_probabilities, 1 - review_rate)
+    )
+    boosted_high_threshold = float(
+        np.quantile(boosted_validation_probabilities, 1 - review_rate)
     )
     customer_priorities = _validation_customer_priorities(
         splits["validation"][0],
@@ -197,9 +213,11 @@ def train(
             "transaction_high": transaction_high_threshold,
             "customer_medium": customer_medium_threshold,
             "customer_high": customer_high_threshold,
+            "shallow_boosted_tree_high": boosted_high_threshold,
         },
         "logistic_regression": {},
         "rule_benchmark": {},
+        "shallow_boosted_tree": {},
     }
     for name in ("validation", "test"):
         frame, split_labels = splits[name]
@@ -210,6 +228,24 @@ def train(
         metrics["rule_benchmark"][name] = _metrics(  # type: ignore[index]
             split_labels, rule_benchmark(frame), 0.65
         )
+        boosted_probabilities = boosted_tree.predict_proba(frame[FEATURE_COLUMNS])[:, 1]
+        metrics["shallow_boosted_tree"][name] = _metrics(  # type: ignore[index]
+            split_labels, boosted_probabilities, boosted_high_threshold
+        )
+    validation_delta = (
+        metrics["shallow_boosted_tree"]["validation"]["pr_auc"]  # type: ignore[index]
+        - metrics["logistic_regression"]["validation"]["pr_auc"]  # type: ignore[index]
+    )
+    metrics["phase4_comparison"] = {
+        "validation_pr_auc_delta": validation_delta,
+        "material_improvement_threshold": 0.02,
+        "material_improvement_observed": validation_delta >= 0.02,
+        "deployed_model": "logistic_regression",
+        "note": (
+            "The challenger is evaluation-only. Review calibration and slices "
+            "before changing the deployed model."
+        ),
+    }
     return artifact, metrics
 
 

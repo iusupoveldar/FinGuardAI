@@ -1,5 +1,6 @@
 from app.database.connection import get_db
 from app.models.customer import Customer
+from app.models.risk import RiskScore
 
 from app.schemas.customer import CustomerResponse
 from app.schemas.customer import RiskDetailResponse
@@ -7,6 +8,7 @@ from app.services.risk_service import latest_risk_score
 from app.config import RISK_FEATURE_VERSION
 from app.config import RISK_MODEL_VERSION
 
+from sqlalchemy import case
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from sqlalchemy.orm import selectinload
@@ -14,6 +16,7 @@ from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import Query
 from fastapi import HTTPException
+from typing import Literal
 
 
 router = APIRouter(
@@ -61,8 +64,41 @@ def get_customer_risk(
 def get_customers(
     limit: int = Query(default=100, ge=1, le=1000),
     offset: int = Query(default=0, ge=0),
+    sort_by: Literal["customer_id", "score"] = Query(default="customer_id"),
+    sort_order: Literal["asc", "desc"] = Query(default="asc"),
     db: Session = Depends(get_db),
 ):
+    latest_score = (
+        select(
+            case(
+                (RiskScore.risk_band == "unscored", None),
+                else_=RiskScore.score,
+            )
+        )
+        .where(
+            RiskScore.customer_id == Customer.customer_id,
+            RiskScore.model_version == RISK_MODEL_VERSION,
+            RiskScore.feature_version == RISK_FEATURE_VERSION,
+        )
+        .order_by(
+            RiskScore.data_cutoff_step.desc(),
+            RiskScore.created_at.desc(),
+            RiskScore.risk_score_id.desc(),
+        )
+        .limit(1)
+        .correlate(Customer)
+        .scalar_subquery()
+    )
+    if sort_by == "score":
+        score_order = latest_score.desc() if sort_order == "desc" else latest_score.asc()
+        ordering = (score_order.nulls_last(), Customer.customer_id.asc())
+    else:
+        customer_order = (
+            Customer.customer_id.desc()
+            if sort_order == "desc"
+            else Customer.customer_id.asc()
+        )
+        ordering = (customer_order,)
     statement = (
         select(Customer)
         .options(
@@ -70,7 +106,7 @@ def get_customers(
             selectinload(Customer.accounts),
             selectinload(Customer.risk_scores),
         )
-        .order_by(Customer.customer_id)
+        .order_by(*ordering)
         .offset(offset)
         .limit(limit)
     )

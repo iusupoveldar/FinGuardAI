@@ -14,3 +14,15 @@ class InvestigationResponse(BaseModel):
     evidence: dict
     created_at: datetime
     updated_at: datetime
+
+
+class InvestigationListItem(BaseModel):
+    investigation_id: int
+    customer_id: str
+    status: str
+    summary: str | None
+    score: float | None
+    risk_band: str | None
+    generation_mode: str | None
+    created_at: datetime
+    updated_at: datetime

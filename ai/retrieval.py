@@ -26,6 +26,17 @@ class RetrievedPolicySource:
     score: float
 
 
+def current_corpus_version(index_dir: Path = DEFAULT_INDEX_DIR) -> str:
+    pointer_path = index_dir / POINTER_FILE
+    if not pointer_path.exists():
+        return "unavailable"
+    try:
+        pointer = json.loads(pointer_path.read_text(encoding="utf-8"))
+        return str(pointer["corpus_version"])
+    except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError):
+        return "unavailable"
+
+
 def build_pattern_query(risk_facts: dict[str, Any] | Iterable[str]) -> str:
     if isinstance(risk_facts, dict):
         patterns = risk_facts.get("patterns", [])

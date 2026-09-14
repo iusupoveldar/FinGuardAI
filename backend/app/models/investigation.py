@@ -38,6 +38,12 @@ class Investigation(Base):
         nullable=False,
         index=True,
     )
+    snapshot_key: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
     risk_score_id: Mapped[int | None] = mapped_column(
         BigInteger,
         ForeignKey("risk_scores.risk_score_id", ondelete="SET NULL"),

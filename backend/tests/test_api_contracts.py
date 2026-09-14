@@ -7,9 +7,18 @@ def test_openapi_builds_and_routes_are_typed() -> None:
     assert "/customers/{customer_id}/transactions" in schema["paths"]
     assert "/customers/{customer_id}/risk" in schema["paths"]
     assert "/investigate/{customer_id}" in schema["paths"]
+    assert "/investigations/{investigation_id}" in schema["paths"]
+    assert "/investigations/" in schema["paths"]
+    assert "/customers/{customer_id}/investigations/latest" in schema["paths"]
 
     customer_response = schema["paths"]["/customers/"]["get"]["responses"]["200"]
     assert customer_response["content"]["application/json"]["schema"]["type"] == "array"
+    parameters = {
+        item["name"] for item in schema["paths"]["/customers/"]["get"]["parameters"]
+    }
+    assert {"sort_by", "sort_order"}.issubset(parameters)
+    history_response = schema["paths"]["/investigations/"]["get"]["responses"]["200"]
+    assert history_response["content"]["application/json"]["schema"]["type"] == "array"
 
 
 def test_customer_identifiers_are_strings() -> None:

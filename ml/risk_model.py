@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 import sklearn
 from sklearn.compose import ColumnTransformer
+from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
@@ -92,6 +93,49 @@ def build_pipeline(random_state: int = 42) -> Pipeline:
                     max_iter=1_000,
                     random_state=random_state,
                     solver="liblinear",
+                ),
+            ),
+        ]
+    )
+
+
+def build_boosted_tree_pipeline(random_state: int = 42) -> Pipeline:
+    """One deliberately shallow Phase 4 challenger for offline comparison."""
+
+    numeric = Pipeline(
+        [
+            ("impute", SimpleImputer(strategy="median")),
+            ("scale", StandardScaler()),
+        ]
+    )
+    categories = Pipeline(
+        [
+            ("impute", SimpleImputer(strategy="most_frequent")),
+            (
+                "encode",
+                OneHotEncoder(handle_unknown="ignore", sparse_output=False),
+            ),
+        ]
+    )
+    return Pipeline(
+        [
+            (
+                "prepare",
+                ColumnTransformer(
+                    [
+                        ("numeric", numeric, NUMERIC_FEATURES),
+                        ("category", categories, CATEGORICAL_FEATURES),
+                    ]
+                ),
+            ),
+            (
+                "model",
+                HistGradientBoostingClassifier(
+                    learning_rate=0.05,
+                    max_iter=100,
+                    max_leaf_nodes=15,
+                    l2_regularization=1.0,
+                    random_state=random_state,
                 ),
             ),
         ]

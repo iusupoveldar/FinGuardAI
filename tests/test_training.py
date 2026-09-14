@@ -37,6 +37,8 @@ def test_training_uses_time_splits_and_versioned_schema() -> None:
     assert metrics["split_steps"]["train"]["maximum"] < metrics["split_steps"]["validation"]["minimum"]
     assert metrics["split_steps"]["validation"]["maximum"] < metrics["split_steps"]["test"]["minimum"]
     assert 0 <= metrics["logistic_regression"]["test"]["pr_auc"] <= 1
+    assert 0 <= metrics["shallow_boosted_tree"]["test"]["pr_auc"] <= 1
+    assert metrics["phase4_comparison"]["deployed_model"] == "logistic_regression"
 
     snapshots = build_customer_snapshots(pd.DataFrame(rows), accounts, artifact)
     unscored = next(item for item in snapshots if item["customer_id"] == "C3")
