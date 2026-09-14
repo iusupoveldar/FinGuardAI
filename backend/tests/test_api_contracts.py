@@ -1,3 +1,5 @@
+from fastapi.testclient import TestClient
+
 from main import app
 
 
@@ -32,3 +34,11 @@ def test_customer_identifiers_are_strings() -> None:
         if item["name"] == "customer_id"
     )
     assert parameter["schema"]["type"] == "string"
+
+
+def test_api_robots_file_disallows_crawling() -> None:
+    response = TestClient(app).get("/robots.txt")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/plain")
+    assert response.text == "User-agent: *\nDisallow: /\n"

@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import PlainTextResponse
 
 # Register all ORM models before the first database query configures mappers.
 import app.models  # noqa: F401
@@ -31,6 +32,12 @@ app.include_router(customers.router)
 app.include_router(transactions.router)
 app.include_router(investigation.router)
 app.include_router(policies.router)
+
+
+@app.get("/robots.txt", include_in_schema=False, response_class=PlainTextResponse)
+async def robots_txt():
+    # The API subdomain has no content that should be crawled or indexed.
+    return "User-agent: *\nDisallow: /\n"
 
 @app.get("/")
 async def root():
