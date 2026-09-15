@@ -403,7 +403,7 @@ function App() {
           <section className="welcome">
             <div>
               <span className="section-kicker"><Activity size={15} /> Live Demo</span>
-              <h2>This is a live demo<br />every piece of data is synthetic.</h2>
+              <h2>This is a live demo<br />every piece of data is synthetic.<br />It taskes a minute before cold server handles the request.</h2>
               <p>Review customer activity and open an investigation when something needs a closer look.</p>
             </div>
             <div className="welcome__seal"><ShieldCheck size={48} /></div>
