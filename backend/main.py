@@ -8,6 +8,7 @@ from app.api import customers
 from app.api import investigation
 from app.api import policies
 from app.api import transactions
+from app.config import CORS_ALLOWED_ORIGINS
 
 app = FastAPI(
     title = "FinGuard AI",
@@ -17,12 +18,7 @@ app = FastAPI(
 # Allow the local React development server to call the API.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:4444",
-        "http://127.0.0.1:4444",
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ],
+    allow_origins=CORS_ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

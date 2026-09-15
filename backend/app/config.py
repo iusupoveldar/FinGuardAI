@@ -31,3 +31,12 @@ if not DATABASE_URL:
         "DATABASE_URL is required. Copy backend/.env.example to backend/.env "
         "and provide a PostgreSQL connection URL."
     )
+
+CORS_ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv(
+        "CORS_ALLOWED_ORIGINS",
+        "http://localhost:4444,http://127.0.0.1:4444,https://finguardai-b9n.pages.dev",
+    ).split(",")
+    if origin.strip()
+]
