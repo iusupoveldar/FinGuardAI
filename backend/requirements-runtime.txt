@@ -1,0 +1,8 @@
+fastapi[standard]
+uvicorn
+sqlalchemy
+psycopg[binary]
+chromadb
+sentence-transformers
+python-dotenv
+pydantic

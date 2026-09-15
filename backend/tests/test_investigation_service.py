@@ -1,9 +1,11 @@
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
+import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
+from ai.retrieval import current_corpus_version
 import app.models  # noqa: F401
 from app import config
 from app.database.base import Base
@@ -12,6 +14,7 @@ from app.models.investigation import Investigation
 from app.services.investigation_service import (
     _fallback_reason,
     _snapshot_key,
+    create_or_reuse_investigation,
     latest_customer_investigation,
     list_investigations,
 )
@@ -82,3 +85,63 @@ def test_investigation_history_is_newest_first_and_latest_is_customer_scoped() -
     assert [item.investigation_id for item in history] == [2, 3, 1]
     assert latest is not None
     assert latest.investigation_id == 3
+
+
+@pytest.mark.parametrize("status", ["pending", "in_progress"])
+def test_stale_investigation_is_requeued(monkeypatch, status: str) -> None:
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    monkeypatch.setattr(config, "INVESTIGATION_STALE_AFTER_SECONDS", 60)
+
+    with Session(engine) as db:
+        db.add(Customer(customer_id="C1"))
+        db.commit()
+        existing = Investigation(
+            investigation_id=1,
+            customer_id="C1",
+            snapshot_key=_snapshot_key("C1", 0, current_corpus_version()),
+            status=status,
+            summary="Interrupted work",
+            evidence={},
+            created_at=datetime.now(timezone.utc) - timedelta(minutes=10),
+            updated_at=datetime.now(timezone.utc) - timedelta(minutes=10),
+        )
+        db.add(existing)
+        db.commit()
+        investigation_id = existing.investigation_id
+
+        recovered, should_process = create_or_reuse_investigation(db, "C1")
+
+    assert recovered is not None
+    assert recovered.investigation_id == investigation_id
+    assert recovered.status == "pending"
+    assert recovered.evidence["stale_recovery_count"] == 1
+    assert should_process is True
+
+
+def test_recent_pending_investigation_is_not_duplicated(monkeypatch) -> None:
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    monkeypatch.setattr(config, "INVESTIGATION_STALE_AFTER_SECONDS", 300)
+
+    with Session(engine) as db:
+        db.add(Customer(customer_id="C1"))
+        db.commit()
+        existing = Investigation(
+            investigation_id=1,
+            customer_id="C1",
+            snapshot_key=_snapshot_key("C1", 0, current_corpus_version()),
+            status="pending",
+            summary="Queued",
+            evidence={},
+        )
+        db.add(existing)
+        db.commit()
+        investigation_id = existing.investigation_id
+
+        reused, should_process = create_or_reuse_investigation(db, "C1")
+
+    assert reused is not None
+    assert reused.investigation_id == investigation_id
+    assert reused.status == "pending"
+    assert should_process is False

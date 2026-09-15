@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 from typing import Any
@@ -49,6 +49,19 @@ def _snapshot_key(
     ).hexdigest()
 
 
+def _is_stale(investigation: Investigation) -> bool:
+    """Return whether a queued or running job has stopped making progress."""
+
+    updated_at = investigation.updated_at
+    if updated_at.tzinfo is None:
+        # SQLite returns naive values in tests; production stores timestamptz.
+        updated_at = updated_at.replace(tzinfo=timezone.utc)
+    cutoff = datetime.now(timezone.utc) - timedelta(
+        seconds=config.INVESTIGATION_STALE_AFTER_SECONDS
+    )
+    return updated_at <= cutoff
+
+
 def create_or_reuse_investigation(
     db: Session, customer_id: str
 ) -> tuple[Investigation | None, bool]:
@@ -65,7 +78,9 @@ def create_or_reuse_investigation(
     key = _snapshot_key(customer_id, cutoff_step, corpus_version)
     risk = latest_risk_score(db, customer_id, cutoff_step=cutoff_step)
     existing = db.scalar(
-        select(Investigation).where(Investigation.snapshot_key == key)
+        select(Investigation)
+        .where(Investigation.snapshot_key == key)
+        .with_for_update()
     )
     if existing is not None:
         # A score may have been generated after an earlier no-score fallback.
@@ -83,6 +98,19 @@ def create_or_reuse_investigation(
                 key: value
                 for key, value in (existing.evidence or {}).items()
                 if key != "error_category"
+            }
+            db.commit()
+            db.refresh(existing)
+            return existing, True
+        if existing.status in {"pending", "in_progress"} and _is_stale(existing):
+            recovery_count = int(
+                (existing.evidence or {}).get("stale_recovery_count", 0)
+            )
+            existing.status = "pending"
+            existing.summary = "Stale investigation recovered and queued for retry."
+            existing.evidence = {
+                **(existing.evidence or {}),
+                "stale_recovery_count": recovery_count + 1,
             }
             db.commit()
             db.refresh(existing)
@@ -221,9 +249,9 @@ def _process(db: Session, investigation: Investigation) -> None:
     corpus_version = str(evidence.get("corpus_version", "unavailable"))
     if risk is not None:
         try:
-            from ai.retrieval import PolicyRetriever
+            from ai.retrieval import get_policy_retriever
 
-            retriever = PolicyRetriever()
+            retriever = get_policy_retriever()
             if str(retriever.pointer["corpus_version"]) != corpus_version:
                 raise ValueError("policy corpus changed after cutoff was frozen")
             sources = [asdict(item) for item in retriever.retrieve(risk.evidence)]
@@ -334,8 +362,12 @@ def process_investigation(investigation_id: int) -> None:
     from app.database.connection import SessionLocal
 
     with SessionLocal() as db:
-        investigation = db.get(Investigation, investigation_id)
-        if investigation is None or investigation.status == "completed":
+        investigation = db.scalar(
+            select(Investigation)
+            .where(Investigation.investigation_id == investigation_id)
+            .with_for_update()
+        )
+        if investigation is None or investigation.status != "pending":
             return
         investigation.status = "in_progress"
         db.commit()

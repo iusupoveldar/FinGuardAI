@@ -42,9 +42,9 @@ def get_customer_risk(
         raise HTTPException(status_code=404, detail="Customer has no risk snapshot")
 
     try:
-        from ai.retrieval import PolicyRetriever
+        from ai.retrieval import get_policy_retriever
 
-        retrieval = PolicyRetriever().retrieve_with_evidence(risk.evidence)
+        retrieval = get_policy_retriever().retrieve_with_evidence(risk.evidence)
         return RiskDetailResponse(
             risk=risk,
             retrieval_status="available",

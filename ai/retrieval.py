@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from datetime import date
+from functools import lru_cache
 import json
 from pathlib import Path
 import re
+from threading import Lock
 from typing import Any, Iterable
 
 import chromadb
@@ -75,6 +77,7 @@ class PolicyRetriever:
             raise ValueError("query embedder does not match the indexed embedding model")
         client = chromadb.PersistentClient(path=str(index_dir / "chroma"))
         self.collection = client.get_collection(self.pointer["collection"])
+        self._embedding_lock = Lock()
 
     def retrieve(
         self,
@@ -93,8 +96,12 @@ class PolicyRetriever:
         count = self.collection.count()
         if not count:
             return []
+        # The default retriever is shared for the life of the API process.
+        # Serialize model inference to avoid multiplying peak PyTorch memory.
+        with self._embedding_lock:
+            query_embedding = self.embedder.embed([query])
         results = self.collection.query(
-            query_embeddings=self.embedder.embed([query]),
+            query_embeddings=query_embedding,
             n_results=min(candidate_count, count),
             include=["documents", "metadatas", "distances"],
         )
@@ -161,3 +168,10 @@ class PolicyRetriever:
             "corpus_version": self.pointer["corpus_version"],
             "policy_sources": [asdict(source) for source in sources],
         }
+
+
+@lru_cache(maxsize=1)
+def get_policy_retriever() -> PolicyRetriever:
+    """Return one lazy, process-wide retriever and embedding model."""
+
+    return PolicyRetriever()

@@ -25,6 +25,9 @@ DEEPSEEK_OUTPUT_RATE = float(os.getenv("DEEPSEEK_OUTPUT_RATE", "0"))
 DEEPSEEK_PRICING_VERSION = os.getenv("DEEPSEEK_PRICING_VERSION", "unconfigured")
 RISK_MODEL_VERSION = os.getenv("RISK_MODEL_VERSION", "logistic_regression_v2")
 RISK_FEATURE_VERSION = os.getenv("RISK_FEATURE_VERSION", "transaction_features_v1")
+INVESTIGATION_STALE_AFTER_SECONDS = max(
+    60, int(os.getenv("INVESTIGATION_STALE_AFTER_SECONDS", "300"))
+)
 
 if not DATABASE_URL:
     raise RuntimeError(

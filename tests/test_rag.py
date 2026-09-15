@@ -4,6 +4,7 @@ from pathlib import Path
 import re
 import shutil
 
+import ai.retrieval as retrieval
 from ai.ingestion import build_index, chunk_document, parse_front_matter
 from ai.retrieval import PolicyRetriever
 
@@ -54,3 +55,22 @@ def test_retrieval_finds_pattern_and_excludes_future_policy(tmp_path: Path) -> N
     assert results[0].document_id == "NSB-STD-TM-004"
     assert all(result.document_id != "NSB-PLAY-INV-002" for result in results)
     assert all(result.source_id.startswith(result.document_id) for result in results)
+
+
+def test_default_retriever_is_cached_for_the_process(monkeypatch) -> None:
+    created = []
+
+    class FakeRetriever:
+        def __init__(self) -> None:
+            created.append(self)
+
+    retrieval.get_policy_retriever.cache_clear()
+    monkeypatch.setattr(retrieval, "PolicyRetriever", FakeRetriever)
+    try:
+        first = retrieval.get_policy_retriever()
+        second = retrieval.get_policy_retriever()
+    finally:
+        retrieval.get_policy_retriever.cache_clear()
+
+    assert first is second
+    assert len(created) == 1
