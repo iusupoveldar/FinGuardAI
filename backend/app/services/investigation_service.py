@@ -6,6 +6,7 @@ from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 import hashlib
 import json
+import logging
 from typing import Any
 
 from sqlalchemy import func, select
@@ -30,6 +31,9 @@ from app.models.customer import Customer
 from app.models.investigation import Investigation
 from app.models.transaction import Transaction
 from app.services.risk_service import latest_risk_score
+
+
+logger = logging.getLogger("uvicorn.error")
 
 
 def _snapshot_key(
@@ -241,21 +245,28 @@ def _fallback_reason(db: Session, risk: Any, sources: list[dict[str, Any]]) -> s
 def _process(db: Session, investigation: Investigation) -> None:
     evidence = dict(investigation.evidence or {})
     cutoff_step = int(evidence["data_cutoff_step"])
+    # Pull latest risk score from the database
     risk = latest_risk_score(
         db, investigation.customer_id, cutoff_step=cutoff_step
     )
-
     sources: list[dict[str, Any]] = []
     corpus_version = str(evidence.get("corpus_version", "unavailable"))
+
     if risk is not None:
         try:
+            # Compare if the current policy is newer than when the risk was calculated
             from ai.retrieval import get_policy_retriever
 
             retriever = get_policy_retriever()
             if str(retriever.pointer["corpus_version"]) != corpus_version:
                 raise ValueError("policy corpus changed after cutoff was frozen")
             sources = [asdict(item) for item in retriever.retrieve(risk.evidence)]
-        except (FileNotFoundError, RuntimeError, ValueError):
+        except (FileNotFoundError, RuntimeError, ValueError) as exc:
+            logger.warning(
+                "Investigation %s policy retrieval failed: %s",
+                investigation.investigation_id,
+                exc,
+            )
             sources = []
 
     packet = (
@@ -269,6 +280,7 @@ def _process(db: Session, investigation: Investigation) -> None:
         if risk is not None
         else None
     )
+    # Selecting reasons for fallback
     fallback_reason = _fallback_reason(db, risk, sources)
     generation_mode = "deterministic_fallback"
     token_usage: dict[str, Any] = {
@@ -286,8 +298,17 @@ def _process(db: Session, investigation: Investigation) -> None:
     }
 
     if fallback_reason is not None:
+        logger.warning(
+            "Investigation %s using deterministic fallback: %s",
+            investigation.investigation_id,
+            fallback_reason,
+        )
         narrative = deterministic_narrative(packet, reason=fallback_reason)
     else:
+        logger.warning(
+            "Ivestigation %s using Deepseek.",
+            investigation.investigation_id
+        )
         try:
             client = DeepSeekClient(
                 api_key=config.DEEPSEEK_API_KEY,
@@ -309,20 +330,43 @@ def _process(db: Session, investigation: Investigation) -> None:
                 }
             )
             fallback_reason = None
+            logger.info(
+                "Investigation %s used DeepSeek model=%s latency_ms=%s retries=%s",
+                investigation.investigation_id,
+                result.provider_model,
+                result.latency_ms,
+                result.retry_count,
+            )
         except DeepSeekBudgetUnavailable:
             fallback_reason = (
                 "DeepSeek reported unavailable account balance; a deterministic "
                 "summary was used."
             )
+            logger.warning(
+                "Investigation %s using deterministic fallback: %s",
+                investigation.investigation_id,
+                fallback_reason,
+            )
             narrative = deterministic_narrative(packet, reason=fallback_reason)  # type: ignore[arg-type]
-        except (DeepSeekError, ValueError):
+        except (DeepSeekError, ValueError) as exc:
             fallback_reason = (
                 "DeepSeek was unavailable or returned an invalid response; a "
                 "deterministic summary was used."
             )
+            logger.warning(
+                "Investigation %s using deterministic fallback: %s (%s: %s)",
+                investigation.investigation_id,
+                fallback_reason,
+                type(exc).__name__,
+                exc,
+            )
             narrative = deterministic_narrative(packet, reason=fallback_reason)  # type: ignore[arg-type]
 
     result_payload = narrative.model_dump(mode="json")
+    logger.warning(
+        "Payload Result: %s",
+        str(result_payload)
+    )
     evidence.update(
         {
             "corpus_version": corpus_version,
@@ -371,9 +415,11 @@ def process_investigation(investigation_id: int) -> None:
             return
         investigation.status = "in_progress"
         db.commit()
+        logger.info("Investigation %s started", investigation_id)
         try:
             _process(db, investigation)
         except Exception:  # noqa: BLE001 - persist only a sanitized failure category
+            logger.exception("Investigation %s failed unexpectedly", investigation_id)
             db.rollback()
             failed = db.get(Investigation, investigation_id)
             if failed is not None:

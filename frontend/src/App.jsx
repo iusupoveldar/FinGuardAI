@@ -11,6 +11,7 @@ import {
   FileSearch,
   FileText,
   History,
+  Info,
   LayoutDashboard,
   LoaderCircle,
   Menu,
@@ -20,7 +21,7 @@ import {
   X,
 } from "lucide-react";
 
-// In development, Vite forwards /api requests to FastAPI on port 8000.
+// In development, Vite forwards /api requests to FastAPI on port 9000.
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 const DEFAULT_PAGE_SIZE = 10;
 const PAGE_SIZE_OPTIONS = [5, 10, 20, 50];
@@ -35,6 +36,7 @@ const TAB_TITLES = {
   overview: "Risk overview",
   investigations: "Past investigations",
   policies: "Current policies",
+  about: "About this demo",
 };
 
 function formatMoney(value) {
@@ -374,6 +376,12 @@ function App() {
           >
             <BookOpen size={19} /> Policies
           </button>
+          <button
+            className={`nav-item ${activeTab === "about" ? "nav-item--active" : ""}`}
+            onClick={() => showTab("about")}
+          >
+            <Info size={19} /> About this demo
+          </button>
         </nav>
         {/* <div className="sidebar__status">
           <span className="status-dot" />
@@ -403,8 +411,9 @@ function App() {
           <section className="welcome">
             <div>
               <span className="section-kicker"><Activity size={15} /> Live Demo</span>
-              <h2>This is a live demo<br />every piece of data is synthetic.<br />It taskes a minute before cold server handles the request.</h2>
-              <p>Review customer activity and open an investigation when something needs a closer look.</p>
+              <h2>Explore a synthetic<br />investigation workflow.</h2>
+              <p>Review customer activity and open an investigation. All data is made for this demo; a sleeping backend may take a moment to respond.</p>
+              <button className="welcome__about-link" onClick={() => showTab("about")}>What is this demo? <ChevronRight size={15} /></button>
             </div>
             <div className="welcome__seal"><ShieldCheck size={48} /></div>
           </section>
@@ -790,6 +799,63 @@ function App() {
                 <EmptyState title="Select a policy" text="Choose a source document to read it here." />
               )}
             </div>
+          </section>
+        </div>
+
+        <div className="page about-page" id="about" hidden={activeTab !== "about"}>
+          <section className="about-hero">
+            <div>
+              <span className="section-kicker"><Info size={15} /> Portfolio demo</span>
+              <h2>A hands-on example of a financial transaction review workflow.</h2>
+              <p>
+                FinGuardAI brings together a customer dashboard, transaction risk scoring,
+                sample policy references, and investigation summaries. It is here for
+                visitors to explore the work behind the project.
+              </p>
+              <button className="primary-button" onClick={() => showTab("overview")}>Explore customers <ChevronRight size={17} /></button>
+            </div>
+            <div className="about-hero__badge">
+              <ShieldCheck size={28} />
+              <strong>Sample data only</strong>
+              <span>No real customer information is shown.</span>
+            </div>
+          </section>
+
+          <section className="about-section" aria-labelledby="about-try-heading">
+            <p className="eyebrow">Try the demo</p>
+            <h3 id="about-try-heading">A simple path through the app</h3>
+            <div className="about-steps">
+              <article className="panel about-step">
+                <span>01</span>
+                <h4>Choose a customer</h4>
+                <p>Browse synthetic accounts and transactions on the Overview page. Where available, a saved score helps prioritize what to review.</p>
+              </article>
+              <article className="panel about-step">
+                <span>02</span>
+                <h4>Open an investigation</h4>
+                <p>See a summary of existing evidence, relevant sample policies, risk factors, and suggested next steps.</p>
+              </article>
+              <article className="panel about-step">
+                <span>03</span>
+                <h4>Explore the sources</h4>
+                <p>Read saved investigations and the policy documents that provide context for the explanations.</p>
+              </article>
+            </div>
+          </section>
+
+          <section className="about-details">
+            <article className="panel about-detail">
+              <p className="eyebrow">What it demonstrates</p>
+              <h3>From data to a readable review</h3>
+              <p>A Python backend imports synthetic transactions, scores activity with a local model, retrieves relevant policy passages, and stores investigation results. The React interface makes the workflow easy to explore.</p>
+              <p>The public interface can run on Cloudflare Pages. Its interactive API and database run separately.</p>
+            </article>
+            <article className="panel about-detail">
+              <p className="eyebrow">Demo boundaries</p>
+              <h3>A showcase, not a decision system</h3>
+              <p>Customers and transactions are synthetic, and the policies are examples. A score is a review priority, not a finding of fraud.</p>
+              <p>DeepSeek may help word an explanation when configured. A deterministic summary is used otherwise. A human would make any real-world decision.</p>
+            </article>
           </section>
         </div>
       </main>
