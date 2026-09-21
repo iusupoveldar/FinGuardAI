@@ -103,7 +103,8 @@ root, run:
 .\deploy_huggingface.bat YOUR_HF_USERNAME/finguardai-api
 ```
 
-The script uploads only the backend Docker build inputs and sample policy files.
+The script uploads only the backend Docker build inputs, sample policy files,
+and the deployment guide.
 It does not upload the frontend, local environment files, database data, or model
 training artifacts. Check the Space build logs after upload, then set the
 Cloudflare Pages frontend's `VITE_API_URL` to the Space's public `.hf.space` URL.

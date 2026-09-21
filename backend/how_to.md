@@ -1,5 +1,19 @@
 # Run FinGuardAI locally
 
+For the standard Windows development setup, run these scripts from the project root:
+
+```bat
+.\backend\setup_backend.bat
+.\backend\prepare_demo.bat
+.\backend\start_backend.bat
+```
+
+The setup script starts PostgreSQL, applies migrations, and imports the synthetic
+dataset. The preparation script trains the model, saves risk scores, and builds
+the policy index. The start script runs FastAPI with auto reload. Both setup and
+start accept `--no-docker` if `backend\.env` points to an existing PostgreSQL
+server. The commands below show the equivalent manual workflow.
+
 Prerequisites: Python 3.11+, Node.js 20.19+ (or 22.12+), npm, Docker Desktop,
 and Docker Compose.
 
@@ -38,6 +52,17 @@ imported. To intentionally replace the imported data, run:
 ```powershell
 python -m data_gen.etl.import_amlsim --replace
 ```
+
+To populate the risk scores and policy search index used by investigations:
+
+```powershell
+python -m ml.train
+python -m ml.score
+python -m ai.ingestion
+```
+
+Training on the full synthetic dataset can take some time. Run these commands
+again after changing the model or policy documents.
 
 ## 2. Start the FastAPI server
 
